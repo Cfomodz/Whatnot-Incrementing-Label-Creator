@@ -21,7 +21,7 @@ COUNTER_FILE = 'counters.json'
 
 # Printer settings
 PRINTER_IP = '10.0.0.13'  # Replace with your printer's IP
-PRINTER_MODEL = 'QL-700'  # QL-710W uses the QL-700 driver
+PRINTER_MODEL = 'QL-710W'
 LABEL_SIZE = '62'  # For 2.4 inch continuous roll (62mm width)
 
 # Add a variable to track the most recent label type
@@ -180,8 +180,8 @@ def print_label(label_type, number, template='default', custom_text=None):
 
         main_text = label_type
         emphasized_text = f" # {number}"
-        image_width = 696  # Fixed width for QL-700
-        
+        image_width = 696  # Fixed width for QL-710W
+
         # Calculate image height based on barcode and text
         # image_height = max(173, barcode_height + 50)  # Ensure minimum height and space for barcode
         image_height = 280 + 173
@@ -323,8 +323,8 @@ def handle_custom_print():
     print(f"barcode_data: {barcode_data}")
     # Create label with same structure as regular print
     qlr = BrotherQLRaster(PRINTER_MODEL)
-    image_width = 696  # Fixed width for QL-700
-    
+    image_width = 696  # Fixed width for QL-710W
+
     try:
         font = ImageFont.truetype("arial.ttf", 60)
         bold_font = ImageFont.truetype("arialbd.ttf", 60)
