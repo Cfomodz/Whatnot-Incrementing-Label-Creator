@@ -1,0 +1,17 @@
+# QL-710W network service (whatnot_live_label_writer.py)
+flask
+flask-cors
+brother_ql
+pillow
+python-barcode[images]
+python-dotenv
+
+# PT-D610BT Bluetooth service (bluetooth_label_printer.py)
+pyserial
+packbits
+
+# Optional: PyBluez for direct Bluetooth socket mode (BT_MODE=socket)
+# Install separately; may require system packages:
+#   sudo apt-get install bluetooth libbluetooth-dev
+#   pip install pybluez
+# pybluez
