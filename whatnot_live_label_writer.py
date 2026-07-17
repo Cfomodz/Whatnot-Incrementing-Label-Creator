@@ -9,9 +9,26 @@ import os
 from PIL import Image, ImageDraw, ImageFont
 from barcode import Code128
 from barcode.writer import ImageWriter
-from templates.logo_template import generate_logo_label
-from templates.coupon_template import generate_coupon_label
 import re  # Add this at the top of the file
+import zlib
+
+# Optional templates: the repo ships without these modules; only the
+# 'logo' / 'coupon' template types need them. Default + custom labels
+# (everything the coin orchestrator uses) work without.
+try:
+    from templates.logo_template import generate_logo_label
+except ImportError:
+    generate_logo_label = None
+try:
+    from templates.coupon_template import generate_coupon_label
+except ImportError:
+    generate_coupon_label = None
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS
@@ -19,10 +36,10 @@ CORS(app)  # Enable CORS
 # Persistent counter storage
 COUNTER_FILE = 'counters.json'
 
-# Printer settings
-PRINTER_IP = '10.0.0.13'  # Replace with your printer's IP
-PRINTER_MODEL = 'QL-700'  # QL-710W uses the QL-700 driver
-LABEL_SIZE = '62'  # For 2.4 inch continuous roll (62mm width)
+# Printer settings (override in .env / environment)
+PRINTER_IP = os.getenv('PRINTER_IP', '10.0.0.13')
+PRINTER_MODEL = os.getenv('PRINTER_MODEL', 'QL-700')  # QL-710W uses the QL-700 driver
+LABEL_SIZE = os.getenv('LABEL_SIZE', '62')  # 62mm continuous roll
 
 # Add a variable to track the most recent label type
 MOST_RECENT_LABEL_TYPE = None
@@ -55,9 +72,15 @@ def save_counters(counters):
 
 counters = load_counters()
 
-def generate_barcode_data(label_type, number):
+def generate_barcode_data(label_type, number, cert=None):
+    if cert:
+        # A coin label's barcode should BE the cert number — stable, and a
+        # scan of the label looks up the exact coin.
+        return str(cert)
     today = datetime.datetime.now().strftime("%m%d%Y")  # MMDDYYYY format
-    type_code = f"{hash(label_type) % 100:02d}"  # 2-digit type code
+    # crc32, not hash(): Python randomizes str hash() per process, so the
+    # old type codes changed on every restart and barcodes were unstable.
+    type_code = f"{zlib.crc32(label_type.encode()) % 100:02d}"  # 2-digit type code
     padded_number = f"{number:04d}"  # 4-digit number with leading zeros
     return f"{today}{type_code}{padded_number}"
 
@@ -155,8 +178,12 @@ def print_label(label_type, number, template='default', custom_text=None):
         return
     
     if template == 'logo':
+        if generate_logo_label is None:
+            raise RuntimeError("logo template requested but templates/logo_template.py is not present")
         image = generate_logo_label(label_type, number, template_settings, image_width, image_height)
     elif template == 'coupon':
+        if generate_coupon_label is None:
+            raise RuntimeError("coupon template requested but templates/coupon_template.py is not present")
         image, coupon_code = generate_coupon_label(label_type, number, template_settings, image_width, image_height)
         # Here you would store the coupon code in your database
     else:
@@ -318,8 +345,11 @@ def handle_custom_print():
         item_number = counters[label_type]
         has_emphasis = False
 
-    # Generate barcode data using the custom label type and item number
-    barcode_data = generate_barcode_data(label_type, item_number)
+    # If the text carries a cert number ("... | Cert 34464855 ..."), the
+    # barcode becomes the cert itself — scan the label, identify the coin.
+    cert_match = re.search(r"[Cc]ert\.?\s*#?\s*(\d{6,})", custom_text)
+    barcode_data = generate_barcode_data(label_type, item_number,
+                                         cert=cert_match.group(1) if cert_match else None)
     print(f"barcode_data: {barcode_data}")
     # Create label with same structure as regular print
     qlr = BrotherQLRaster(PRINTER_MODEL)
